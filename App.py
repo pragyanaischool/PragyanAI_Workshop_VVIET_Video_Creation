@@ -143,6 +143,4 @@ if st.button("🚀 Create & Play Video", use_container_width=True):
     else:
         st.warning("Please upload images and provide audio first.")
 
-            if st.button("Fetch YouTube Audio"):
-    with st.spinner("Downloading..."):
         
