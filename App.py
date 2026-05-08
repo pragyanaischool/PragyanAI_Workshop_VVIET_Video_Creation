@@ -1,12 +1,25 @@
 import streamlit as st
 import os
+import glob
 from moviepy.editor import ImageClip, concatenate_videoclips, AudioFileClip
 import yt_dlp
 
-# --- Utility Functions ---
+# --- UI Config ---
+st.set_page_config(page_title="Image to Video Pro", layout="wide")
+
+# --- Functions ---
+
+def cleanup_temp_files():
+    """Removes temporary files created during processing."""
+    files = glob.glob("temp_*") + ["output_video.mp4"]
+    for f in files:
+        try:
+            os.remove(f)
+        except:
+            pass
 
 def download_youtube_audio(url):
-    """Downloads audio from a YouTube URL and returns the filename."""
+    """Downloads audio from YouTube."""
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': 'temp_audio.%(ext)s',
@@ -20,81 +33,100 @@ def download_youtube_audio(url):
         ydl.download([url])
     return "temp_audio.mp3"
 
-def create_video(image_file, duplicate_count, fps, audio_path):
-    """Creates a video by repeating a single image and attaching audio."""
-    # Save the uploaded image temporarily
-    with open("temp_img.png", "wb") as f:
-        f.write(image_file.getbuffer())
+def create_video(image_files, duplicate_count, fps, audio_path):
+    """Generates video from images and merges with audio."""
+    clips = []
+    duration_per_image = duplicate_count / fps
+
+    for idx, img_file in enumerate(image_files):
+        temp_img_path = f"temp_img_{idx}.png"
+        with open(temp_img_path, "wb") as f:
+            f.write(img_file.getbuffer())
+        
+        # Create clip and ensure it has a duration
+        clip = ImageClip(temp_img_path).set_duration(duration_per_image)
+        clips.append(clip)
     
-    # Calculate duration of one 'frame' based on FPS
-    frame_duration = 1 / fps
+    # Concatenate and set global FPS
+    final_video = concatenate_videoclips(clips, method="compose")
+    final_video.fps = fps
     
-    # Create a clip from the image
-    clip = ImageClip("temp_img.png").set_duration(frame_duration * duplicate_count)
-    clip = clip.set_fps(fps)
+    # Load and attach audio
+    audio_clip = AudioFileClip(audio_path)
     
-    # Attach audio
-    audio = AudioFileClip(audio_path)
-    
-    # If video is shorter than audio, loop video or trim audio
-    # Here we match the audio duration to the video duration
-    final_clip = clip.set_audio(audio.set_duration(clip.duration))
-    
-    output_path = "output_video.mp4"
-    final_clip.write_videofile(output_path, codec="libx264", audio_codec="aac")
-    return output_path
-
-# --- Streamlit UI ---
-
-st.title("🖼️ Image-to-Video with Audio Merger")
-
-# 1. Image Upload & Settings
-st.header("Step 1: Configure Visuals")
-uploaded_image = st.file_uploader("Upload an Image", type=["jpg", "png", "jpeg"])
-col1, col2 = st.columns(2)
-with col1:
-    fps = st.number_input("Specify FPS (Frames Per Second)", min_value=1, value=24)
-with col2:
-    duplicates = st.number_input("Number of times to duplicate image", min_value=1, value=100)
-
-total_seconds = duplicates / fps
-st.info(f"Total Video Duration: {total_seconds:.2f} seconds")
-
-# 2. Audio Input
-st.header("Step 2: Add Audio")
-audio_option = st.radio("Choose Audio Source:", ("Upload File", "YouTube Link"))
-
-audio_file_path = None
-
-if audio_option == "Upload File":
-    uploaded_audio = st.file_uploader("Upload Audio", type=["mp3", "wav", "m4a"])
-    if uploaded_audio:
-        with open("temp_audio_upload.mp3", "wb") as f:
-            f.write(uploaded_audio.getbuffer())
-        audio_file_path = "temp_audio_upload.mp3"
-
-else:
-    yt_url = st.text_input("Enter YouTube Video URL")
-    if yt_url and st.button("Extract Audio from YouTube"):
-        with st.spinner("Extracting audio..."):
-            try:
-                audio_file_path = download_youtube_audio(yt_url)
-                st.success("Audio extracted successfully!")
-            except Exception as e:
-                st.error(f"Error: {e}")
-
-# 3. Process and Play
-st.header("Step 3: Generate Video")
-if st.button("Generate and Merge Video"):
-    if uploaded_image and audio_file_path:
-        with st.spinner("Processing video..."):
-            video_path = create_video(uploaded_image, duplicates, fps, audio_file_path)
-            
-            st.success("Video Created!")
-            st.video(video_path)
-            
-            # Download button
-            with open(video_path, "rb") as file:
-                st.download_button("Download Video", file, "final_video.mp4", "video/mp4")
+    # Logic: Sync audio and video lengths
+    if audio_clip.duration > final_video.duration:
+        audio_clip = audio_clip.set_duration(final_video.duration)
     else:
-        st.warning("Please ensure both image and audio are provided.")
+        # If audio is shorter, the video will just have silence at the end
+        pass
+
+    final_clip = final_video.set_audio(audio_clip)
+    
+    output_filename = "output_video.mp4"
+    final_clip.write_videofile(output_filename, codec="libx264", audio_codec="aac", temp_audiofile='temp-audio.m4a', remove_temp=True)
+    
+    return output_filename
+
+# --- Streamlit Interface ---
+
+st.title("🎬 Multimedia Merger")
+st.markdown("Upload multiple images, specify timing, and add audio from a file or YouTube.")
+
+with st.sidebar:
+    st.header("⚙️ Settings")
+    fps = st.slider("Frames Per Second (FPS)", 1, 60, 24)
+    duplicates = st.number_input("Frames per Image", min_value=1, value=48, help="How many frames each image stays on screen.")
+    
+    if st.button("Clear Temp Files"):
+        cleanup_temp_files()
+        st.success("Cleaned up!")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader("1. Images")
+    uploaded_images = st.file_uploader("Upload Image Sequence", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
+    if uploaded_images:
+        st.write(f"✅ {len(uploaded_images)} images uploaded.")
+        st.info(f"Each image will play for {duplicates/fps:.2f} seconds.")
+
+with col2:
+    st.subheader("2. Audio")
+    audio_source = st.radio("Source", ["Upload File", "YouTube Link"])
+    
+    audio_path = None
+    if audio_source == "Upload File":
+        uploaded_audio = st.file_uploader("Upload Audio", type=["mp3", "wav"])
+        if uploaded_audio:
+            audio_path = "temp_audio_manual.mp3"
+            with open(audio_path, "wb") as f:
+                f.write(uploaded_audio.getbuffer())
+    else:
+        yt_url = st.text_input("YouTube URL")
+        if yt_url:
+            if st.button("Fetch YouTube Audio"):
+                with st.spinner("Downloading..."):
+                    audio_path = download_youtube_audio(yt_url)
+                    st.success("Audio Ready!")
+                    st.session_state['yt_audio'] = audio_path
+
+# Persistence for YouTube audio
+if 'yt_audio' in st.session_state and audio_source == "YouTube Link":
+    audio_path = st.session_state['yt_audio']
+
+# --- Final Step ---
+st.divider()
+if st.button("🚀 Create & Play Video", use_container_width=True):
+    if uploaded_images and audio_path:
+        try:
+            with st.spinner("Rendering video... This may take a minute."):
+                video_file = create_video(uploaded_images, duplicates, fps, audio_path)
+                st.video(video_file)
+                
+                with open(video_file, "rb") as f:
+                    st.download_button("📥 Download Result", f, file_name="my_video.mp4")
+        except Exception as e:
+            st.error(f"An error occurred: {e}")
+    else:
+        st.warning("Please upload images and provide audio first.")
