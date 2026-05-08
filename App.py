@@ -22,25 +22,32 @@ def cleanup_temp_files():
             pass
 
 def download_youtube_audio(url):
-    ydl_opts = {
+    """Downloads only audio from YouTube using reliable settings."""
+    audio_opts = {
         'format': 'bestaudio/best',
         'outtmpl': 'temp_audio.%(ext)s',
-        # This tells yt-dlp to use a specific client type that is less likely to be blocked
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['web', 'mweb'],
-                'po_token': ['web+1'] # This is a placeholder for the automated token system
-            }
+        # Instead of fake PO tokens, use impersonation to look like a real browser
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': '*/*',
+            'Referer': 'https://www.google.com/',
         },
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
             'preferredquality': '192',
         }],
+        # Important: Don't specify extractor_args with fake tokens unless you are using a provider plugin
     }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
-    return "temp_audio.mp3"
+
+    try:
+        with yt_dlp.YoutubeDL(audio_opts) as ydl:
+            print(f"Downloading audio from {url}...")
+            ydl.download([url])
+        return "temp_audio.mp3"
+    except Exception as e:
+        print(f"Audio download failed: {e}")
+        return None
     
 def create_video(image_files, duplicate_count, fps, audio_path):
     clips = []
