@@ -22,23 +22,16 @@ def cleanup_temp_files():
             pass
 
 def download_youtube_audio(url):
-    """Downloads audio from YouTube with anti-bot headers."""
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': 'temp_audio.%(ext)s',
-        # --- ADD THESE CRITICAL BYPASS SETTINGS ---
-        'quiet': True,
-        'no_warnings': True,
-        'nocheckcertificate': True,
-        'ignoreerrors': False,
-        'logtostderr': False,
-        'addheader': [
-            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-            'Accept-Language: en-US,en;q=0.9',
-            'Referer: https://www.google.com/'
-        ],
-        # ------------------------------------------
+        # This tells yt-dlp to use a specific client type that is less likely to be blocked
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['web', 'mweb'],
+                'po_token': ['web+1'] # This is a placeholder for the automated token system
+            }
+        },
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
@@ -123,10 +116,13 @@ with col2:
         if yt_url:
             if st.button("Fetch YouTube Audio"):
                 with st.spinner("Downloading..."):
-                    audio_path = download_youtube_audio(yt_url)
-                    st.success("Audio Ready!")
-                    st.session_state['yt_audio'] = audio_path
-
+                    try:
+                        audio_path = download_youtube_audio(yt_url)
+                        st.success("Audio Ready!")
+                        st.session_state['yt_audio'] = audio_path
+                    except Exception as e:
+                        st.error("YouTube blocked the download (403 Forbidden).")
+                        st.info("💡 **Workshop Workaround:** Cloud servers are often blocked by YouTube. Please use the 'Upload File' option and upload an MP3 file directly.")
 # Persistence for YouTube audio
 if 'yt_audio' in st.session_state and audio_source == "YouTube Link":
     audio_path = st.session_state['yt_audio']
@@ -146,3 +142,7 @@ if st.button("🚀 Create & Play Video", use_container_width=True):
             st.error(f"An error occurred: {e}")
     else:
         st.warning("Please upload images and provide audio first.")
+
+            if st.button("Fetch YouTube Audio"):
+    with st.spinner("Downloading..."):
+        
