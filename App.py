@@ -43,7 +43,6 @@ def download_youtube_audio(url):
     return "temp_audio.mp3"
     
 def create_video(image_files, duplicate_count, fps, audio_path):
-    """Generates video from images and merges with audio."""
     clips = []
     duration_per_image = duplicate_count / fps
 
@@ -52,33 +51,27 @@ def create_video(image_files, duplicate_count, fps, audio_path):
         with open(temp_img_path, "wb") as f:
             f.write(img_file.getbuffer())
         
-        # Create clip and ensure it has a duration
-        #clip = ImageClip(temp_img_path).set_duration(duration_per_image)
-        clip = ImageClip(temp_img_path).with_duration(duration_per_image)
-        
+        # Version-safe duration setting
+        clip = ImageClip(temp_img_path)
+        clip = clip.with_duration(duration_per_image) if hasattr(clip, 'with_duration') else clip.set_duration(duration_per_image)
         clips.append(clip)
     
-    # Concatenate and set global FPS
     final_video = concatenate_videoclips(clips, method="compose")
-    final_video.fps = fps
     
-    # Load and attach audio
+    # Version-safe FPS setting
+    final_video = final_video.with_fps(fps) if hasattr(final_video, 'with_fps') else final_video.set_fps(fps)
+    
     audio_clip = AudioFileClip(audio_path)
     
-    
-    # Logic: Sync audio and video lengths
+    # Version-safe audio trimming
     if audio_clip.duration > final_video.duration:
-        audio_clip = audio_clip.set_duration(final_video.duration)
-    else:
-        # If audio is shorter, the video will just have silence at the end
-        pass
+        audio_clip = audio_clip.with_duration(final_video.duration) if hasattr(audio_clip, 'with_duration') else audio_clip.set_duration(final_video.duration)
 
-    #final_clip = final_video.set_audio(audio_clip)
-    # For audio and FPS:
-    final_video = final_video.with_fps(fps)
-    final_clip = final_video.with_audio(audio_clip)
+    # Version-safe audio attachment
+    final_clip = final_video.with_audio(audio_clip) if hasattr(final_video, 'with_audio') else final_video.set_audio(audio_clip)
+    
     output_filename = "output_video.mp4"
-    final_clip.write_videofile(output_filename, codec="libx264", audio_codec="aac", temp_audiofile='temp-audio.m4a', remove_temp=True)
+    final_clip.write_videofile(output_filename, codec="libx264", audio_codec="aac")
     
     return output_filename
 
