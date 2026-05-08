@@ -53,7 +53,9 @@ def create_video(image_files, duplicate_count, fps, audio_path):
             f.write(img_file.getbuffer())
         
         # Create clip and ensure it has a duration
-        clip = ImageClip(temp_img_path).set_duration(duration_per_image)
+        #clip = ImageClip(temp_img_path).set_duration(duration_per_image)
+        clip = ImageClip(temp_img_path).with_duration(duration_per_image)
+        
         clips.append(clip)
     
     # Concatenate and set global FPS
@@ -63,6 +65,7 @@ def create_video(image_files, duplicate_count, fps, audio_path):
     # Load and attach audio
     audio_clip = AudioFileClip(audio_path)
     
+    
     # Logic: Sync audio and video lengths
     if audio_clip.duration > final_video.duration:
         audio_clip = audio_clip.set_duration(final_video.duration)
@@ -70,8 +73,10 @@ def create_video(image_files, duplicate_count, fps, audio_path):
         # If audio is shorter, the video will just have silence at the end
         pass
 
-    final_clip = final_video.set_audio(audio_clip)
-    
+    #final_clip = final_video.set_audio(audio_clip)
+    # For audio and FPS:
+    final_video = final_video.with_fps(fps)
+    final_clip = final_video.with_audio(audio_clip)
     output_filename = "output_video.mp4"
     final_clip.write_videofile(output_filename, codec="libx264", audio_codec="aac", temp_audiofile='temp-audio.m4a', remove_temp=True)
     
