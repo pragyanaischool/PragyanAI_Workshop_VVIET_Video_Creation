@@ -45,32 +45,35 @@ def download_youtube_audio(url):
 def create_video(image_files, duplicate_count, fps, audio_path):
     clips = []
     duration_per_image = duplicate_count / fps
+    
+    # Define your target resolution (Full HD: 1920x1080 or HD: 1280x720)
+    target_resolution = (1280, 720) 
 
     for idx, img_file in enumerate(image_files):
         temp_img_path = f"temp_img_{idx}.png"
         with open(temp_img_path, "wb") as f:
             f.write(img_file.getbuffer())
         
-        # Version-safe duration setting
-        clip = ImageClip(temp_img_path)
-        clip = clip.with_duration(duration_per_image) if hasattr(clip, 'with_duration') else clip.set_duration(duration_per_image)
+        # Load and Resize image to fill the target resolution
+        # .resized(target_resolution) ensures all frames match
+        clip = ImageClip(temp_img_path).with_duration(duration_per_image)
+        clip = clip.resized(target_resolution) 
+        
         clips.append(clip)
     
+    # Combine clips
     final_video = concatenate_videoclips(clips, method="compose")
+    final_video = final_video.with_fps(fps)
     
-    # Version-safe FPS setting
-    final_video = final_video.with_fps(fps) if hasattr(final_video, 'with_fps') else final_video.set_fps(fps)
-    
+    # Process Audio
     audio_clip = AudioFileClip(audio_path)
-    
-    # Version-safe audio trimming
     if audio_clip.duration > final_video.duration:
-        audio_clip = audio_clip.with_duration(final_video.duration) if hasattr(audio_clip, 'with_duration') else audio_clip.set_duration(final_video.duration)
+        audio_clip = audio_clip.with_duration(final_video.duration)
 
-    # Version-safe audio attachment
-    final_clip = final_video.with_audio(audio_clip) if hasattr(final_video, 'with_audio') else final_video.set_audio(audio_clip)
+    final_clip = final_video.with_audio(audio_clip)
     
     output_filename = "output_video.mp4"
+    # Note: 'libx264' is standard for web playback
     final_clip.write_videofile(output_filename, codec="libx264", audio_codec="aac")
     
     return output_filename
