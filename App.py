@@ -17,7 +17,19 @@ if 'audio_path' not in st.session_state:
     st.session_state['audio_path'] = None
 
 # --- Functions ---
-
+# 1. Define the callback function at the top (under your imports)
+def fetch_youtube_callback(url):
+    with st.spinner("Downloading audio..."):
+        try:
+            res_path = download_youtube_audio(url)
+            if res_path:
+                st.session_state['audio_path'] = res_path
+                st.toast("✅ YouTube Audio Ready!", icon="🎵")
+            else:
+                st.error("Download failed. No path returned.")
+        except Exception as e:
+            st.error(f"Download Error: {e}")
+            
 def cleanup_temp_files():
     """Removes temporary files created during processing."""
     files = glob.glob("temp_*") + ["output_video.mp4", "temp_audio_manual.mp3"]
@@ -123,26 +135,31 @@ with col2:
             manual_path = "temp_audio_manual.mp3"
             with open(manual_path, "wb") as f:
                 f.write(uploaded_audio.getbuffer())
+            # Save to state immediately
             st.session_state['audio_path'] = manual_path
             st.success("Audio File Ready")
+    
     else:
-        yt_url = st.text_input("YouTube URL")
+        yt_url = st.text_input("Enter YouTube URL")
         if yt_url:
-            if st.button("Fetch YouTube Audio"):
-                with st.spinner("Downloading audio..."):
-                    try:
-                        res_path = download_youtube_audio(yt_url)
-                        st.session_state['audio_path'] = res_path
-                        st.success("YouTube Audio Ready!")
-                    except Exception as e:
-                        st.error(f"Download Error: {e}")
-                        st.info("💡 YouTube often blocks cloud servers. If this fails, download the MP3 locally and use 'Upload File'.")
+            # Using on_click and args is the "Golden Rule" for session persistence
+            st.button("Fetch YouTube Audio", 
+                      on_click=handle_youtube_download, 
+                      args=(yt_url,))
+            
+            # Display errors if the callback caught any
+            if 'yt_error' in st.session_state:
+                st.error(f"Download Error: {st.session_state['yt_error']}")
+                st.info("💡 YouTube often blocks cloud servers. Use 'Upload File' as a fallback.")
+                # Clear error so it doesn't stay forever
+                del st.session_state['yt_error']
 
-# Check status of audio in memory
-if st.session_state['audio_path']:
-    st.write("🎵 **Audio Status:** Loaded and Ready")
+# --- Persistent Audio Status Display ---
+st.write("---") # Visual separator
+if st.session_state.get('audio_path'):
+    st.success(f"🎵 **Audio Status:** Loaded and Ready ({st.session_state['audio_path']})")
 else:
-    st.write("🎵 **Audio Status:** Not Loaded")
+    st.warning("🎵 **Audio Status:** Not Loaded")
 
 # --- Final Step ---
 st.divider()
