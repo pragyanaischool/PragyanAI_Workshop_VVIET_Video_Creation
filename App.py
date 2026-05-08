@@ -79,12 +79,12 @@ def create_video(image_files, duplicate_count, fps, audio_path):
     return output_filename
 
 # --- Streamlit Interface ---
-
-st.title("🎬 Multimedia Merger")
+st.image()
+st.title("PragyanAI - Multimedia Merger")
 st.markdown("Upload multiple images, specify timing, and add audio from a file or YouTube.")
 
 with st.sidebar:
-    st.header("⚙️ Settings")
+    st.header(" Video - Settings")
     fps = st.slider("Frames Per Second (FPS)", 1, 60, 24)
     duplicates = st.number_input("Frames per Image", min_value=1, value=48, help="How many frames each image stays on screen.")
     
@@ -130,7 +130,7 @@ if 'yt_audio' in st.session_state and audio_source == "YouTube Link":
 
 # --- Final Step ---
 st.divider()
-if st.button("🚀 Create & Play Video", use_container_width=True):
+if st.button(" Create & Play Video", use_container_width=True):
     if uploaded_images and audio_path:
         try:
             with st.spinner("Rendering video... This may take a minute."):
