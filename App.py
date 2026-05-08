@@ -9,43 +9,31 @@ except ImportError:
     from moviepy import ImageClip, concatenate_videoclips, AudioFileClip
 import yt_dlp
 
-# --- UI Config ---
-st.set_page_config(page_title="PragyanAI Video Creator", layout="wide")
-
-# Initialize Session State for audio persistence
+# --- 1. INITIALIZE STATE ---
 if 'audio_path' not in st.session_state:
     st.session_state['audio_path'] = None
+if 'yt_error' in st.session_state:
+    pass # Keep it for display logic
 
-# --- Functions ---
-# 1. Define the callback function at the top (under your imports)
-def fetch_youtube_callback(url):
-    with st.spinner("Downloading audio..."):
-        try:
-            res_path = download_youtube_audio(url)
-            if res_path:
-                st.session_state['audio_path'] = res_path
-                st.toast("✅ YouTube Audio Ready!", icon="🎵")
-            else:
-                st.error("Download failed. No path returned.")
-        except Exception as e:
-            st.error(f"Download Error: {e}")
-            
+# --- 2. DEFINE ALL FUNCTIONS ---
+
 def cleanup_temp_files():
-    """Removes temporary files created during processing."""
-    files = glob.glob("temp_*") + ["output_video.mp4", "temp_audio_manual.mp3"]
+    """Removes temporary files and resets memory."""
+    files = glob.glob("temp_*") + ["output_video.mp4"]
     for f in files:
         try:
             os.remove(f)
         except:
             pass
     st.session_state['audio_path'] = None
+    if 'yt_error' in st.session_state:
+        del st.session_state['yt_error']
 
 def download_youtube_audio(url):
-    """Downloads only audio from YouTube using reliable settings."""
+    """Downloads only audio from YouTube using reliable browser impersonation."""
     audio_opts = {
         'format': 'bestaudio/best',
         'outtmpl': 'temp_audio.%(ext)s',
-        # Instead of fake PO tokens, use impersonation to look like a real browser
         'http_headers': {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
             'Accept': '*/*',
@@ -56,17 +44,23 @@ def download_youtube_audio(url):
             'preferredcodec': 'mp3',
             'preferredquality': '192',
         }],
-        # Important: Don't specify extractor_args with fake tokens unless you are using a provider plugin
     }
+    with yt_dlp.YoutubeDL(audio_opts) as ydl:
+        ydl.download([url])
+    return "temp_audio.mp3"
 
+def handle_youtube_download(url):
+    """Callback function to ensure session state persists after button click."""
     try:
-        with yt_dlp.YoutubeDL(audio_opts) as ydl:
-            print(f"Downloading audio from {url}...")
-            ydl.download([url])
-        return "temp_audio.mp3"
+        # Clear previous errors
+        if 'yt_error' in st.session_state:
+            del st.session_state['yt_error']
+            
+        res_path = download_youtube_audio(url)
+        if res_path:
+            st.session_state['audio_path'] = res_path
     except Exception as e:
-        print(f"Audio download failed: {e}")
-        return None
+        st.session_state['yt_error'] = str(e)
 
 def create_video(image_files, duplicate_count, fps, audio_path):
     """Processes images and merges with audio using MoviePy 2.0+ syntax."""
@@ -95,10 +89,11 @@ def create_video(image_files, duplicate_count, fps, audio_path):
     
     output_filename = "output_video.mp4"
     final_clip.write_videofile(output_filename, codec="libx264", audio_codec="aac")
-    
     return output_filename
 
-# --- Streamlit Interface ---
+# --- 3. STREAMLIT UI LOGIC ---
+
+st.set_page_config(page_title="PragyanAI Video Creator", layout="wide")
 
 # Display logo if it exists
 if os.path.exists("PragyanAI_Transperent.png"):
@@ -110,11 +105,11 @@ st.markdown("Upload multiple images, specify timing, and add audio from a file o
 with st.sidebar:
     st.header("Video Settings")
     fps = st.slider("Frames Per Second (FPS)", 1, 60, 24)
-    duplicates = st.number_input("Frames per Image", min_value=1, value=48, help="Number of frames each image stays on screen.")
+    duplicates = st.number_input("Frames per Image", min_value=1, value=48)
     
     if st.button("Clear Cache & Temp Files"):
         cleanup_temp_files()
-        st.success("Cleaned up!")
+        st.rerun()
 
 col1, col2 = st.columns(2)
 
@@ -135,37 +130,32 @@ with col2:
             manual_path = "temp_audio_manual.mp3"
             with open(manual_path, "wb") as f:
                 f.write(uploaded_audio.getbuffer())
-            # Save to state immediately
             st.session_state['audio_path'] = manual_path
             st.success("Audio File Ready")
     
     else:
         yt_url = st.text_input("Enter YouTube URL")
         if yt_url:
-            # Using on_click and args is the "Golden Rule" for session persistence
+            # handle_youtube_download is defined above, so no NameError
             st.button("Fetch YouTube Audio", 
                       on_click=handle_youtube_download, 
                       args=(yt_url,))
             
-            # Display errors if the callback caught any
             if 'yt_error' in st.session_state:
                 st.error(f"Download Error: {st.session_state['yt_error']}")
                 st.info("💡 YouTube often blocks cloud servers. Use 'Upload File' as a fallback.")
-                # Clear error so it doesn't stay forever
-                del st.session_state['yt_error']
 
-# --- Persistent Audio Status Display ---
-st.write("---") # Visual separator
+# Persistent Status Check
+st.write("---")
 if st.session_state.get('audio_path'):
     st.success(f"🎵 **Audio Status:** Loaded and Ready ({st.session_state['audio_path']})")
 else:
     st.warning("🎵 **Audio Status:** Not Loaded")
 
-# --- Final Step ---
+# --- 4. FINAL GENERATION ---
 st.divider()
 if st.button("🚀 Create & Play Video", use_container_width=True):
-    # CRITICAL FIX: Check session_state instead of local variable
-    if uploaded_images and st.session_state['audio_path']:
+    if uploaded_images and st.session_state.get('audio_path'):
         try:
             with st.spinner("Rendering video... This may take a minute."):
                 video_file = create_video(uploaded_images, duplicates, fps, st.session_state['audio_path'])
@@ -176,8 +166,5 @@ if st.button("🚀 Create & Play Video", use_container_width=True):
         except Exception as e:
             st.error(f"An error occurred: {e}")
     else:
-        if not uploaded_images:
-            st.warning("Please upload at least one image.")
-        if not st.session_state['audio_path']:
-            st.warning("Please provide an audio source (Upload or Fetch YouTube).")
-          
+        st.warning("Please ensure images are uploaded and audio is 'Loaded and Ready'.")
+        
