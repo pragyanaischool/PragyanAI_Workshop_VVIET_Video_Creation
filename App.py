@@ -33,6 +33,7 @@ def download_youtube_audio(url):
     audio_opts = {
         'format': 'bestaudio/best',
         'outtmpl': 'temp_audio.%(ext)s',
+        # Instead of fake PO tokens, use impersonation to look like a real browser
         'http_headers': {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
             'Accept': '*/*',
@@ -43,14 +44,17 @@ def download_youtube_audio(url):
             'preferredcodec': 'mp3',
             'preferredquality': '192',
         }],
+        # Important: Don't specify extractor_args with fake tokens unless you are using a provider plugin
     }
 
     try:
         with yt_dlp.YoutubeDL(audio_opts) as ydl:
+            print(f"Downloading audio from {url}...")
             ydl.download([url])
         return "temp_audio.mp3"
     except Exception as e:
-        raise e
+        print(f"Audio download failed: {e}")
+        return None
 
 def create_video(image_files, duplicate_count, fps, audio_path):
     """Processes images and merges with audio using MoviePy 2.0+ syntax."""
