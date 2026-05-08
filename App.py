@@ -22,15 +22,23 @@ def cleanup_temp_files():
             pass
 
 def download_youtube_audio(url):
+    """Downloads audio from YouTube with anti-bot headers."""
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': 'temp_audio.%(ext)s',
-        # ADD THESE LINES BELOW:
+        # --- ADD THESE CRITICAL BYPASS SETTINGS ---
         'quiet': True,
         'no_warnings': True,
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'referer': 'https://www.youtube.com/',
-        # -------------------
+        'nocheckcertificate': True,
+        'ignoreerrors': False,
+        'logtostderr': False,
+        'addheader': [
+            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'Accept-Language: en-US,en;q=0.9',
+            'Referer: https://www.google.com/'
+        ],
+        # ------------------------------------------
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
@@ -40,7 +48,7 @@ def download_youtube_audio(url):
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
     return "temp_audio.mp3"
-
+    
 def create_video(image_files, duplicate_count, fps, audio_path):
     """Generates video from images and merges with audio."""
     clips = []
